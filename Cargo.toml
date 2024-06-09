@@ -1,0 +1,6 @@
+[workspace]
+members = ["compiler"]
+
+resolver = "2"
+
+license = "ZLIB OR MIT OR Apache-2.0"
