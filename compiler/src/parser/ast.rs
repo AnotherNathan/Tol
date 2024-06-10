@@ -1,38 +1,39 @@
 use std::ops::Range;
 
-use super::lexer::Literal;
+use super::{lexer::Literal, span::Span};
 
-pub struct Package<'a> {
-    pub files: Vec<File<'a>>,
+pub struct Package {
+    pub files: Vec<File>,
 }
 
-pub struct File<'a> {
+pub struct File {
     pub path: String,
-    pub top_level_elements: Vec<TopLevelElement<'a>>,
+    pub source: String,
+    pub top_level_elements: Vec<TopLevelElement>,
 }
 
-pub enum TopLevelElement<'a> {
-    Import(&'a str),
-    Proc(Proc<'a>),
+pub enum TopLevelElement {
+    Import,
+    Proc(Proc),
     Struct,
     Enum,
 }
 
-pub struct Proc<'a> {
-    pub ident: &'a str,
-    pub arguments: Vec<Argument<'a>>,
-    pub returns: Vec<Argument<'a>>,
-    pub body: Vec<Statement<'a>>,
+pub struct Proc {
+    pub ident: Span,
+    pub arguments: Vec<Argument>,
+    pub returns: Vec<Argument>,
+    pub body: Vec<Statement>,
     pub span: Range<usize>,
 }
 
-pub struct Argument<'a> {
-    pub ident: &'a str,
-    pub data_type: DataType<'a>,
+pub struct Argument {
+    pub ident: Span,
+    pub data_type: DataType,
     pub span: Range<usize>,
 }
 
-pub enum DataType<'a> {
+pub enum DataType {
     U8,
     U16,
     U32,
@@ -46,88 +47,88 @@ pub enum DataType<'a> {
     String,
     Slice(Box<Self>),
     Array { size: u64, element_type: Box<Self> },
-    Custom(CompoundDataType<'a>),
+    Custom(CompoundDataType),
 }
 
-pub struct CompoundDataType<'a> {
-    pub ident: &'a str,
-    pub package: &'a str,
+pub struct CompoundDataType {
+    pub ident: Span,
+    pub package: Option<Span>,
 }
 
-pub enum Statement<'a> {
-    Assignment(Assignment<'a>),
-    Expression(Expression<'a>),
+pub enum Statement {
+    Assignment(Assignment),
+    Expression(Expression),
     Loop,
 }
 
-pub struct Assignment<'a> {
-    pub left: &'a str,
-    pub right: Expression<'a>,
+pub struct Assignment {
+    pub left: Span,
+    pub right: Expression,
 }
 
-pub enum Expression<'a> {
-    IfElse(IfElse<'a>),
-    And(AndExpression<'a>),
-    Or(OrExpression<'a>),
-    Not(NotExpression<'a>),
-    Add(AddExpression<'a>),
-    Subtract(SubtractExpression<'a>),
-    Divide(DivideExpression<'a>),
-    Multiply(MultiplyExpression<'a>),
-    Unary(UnaryExpression<'a>),
+pub enum Expression {
+    IfElse(IfElse),
+    And(AndExpression),
+    Or(OrExpression),
+    Not(NotExpression),
+    Add(AddExpression),
+    Subtract(SubtractExpression),
+    Divide(DivideExpression),
+    Multiply(MultiplyExpression),
+    Unary(UnaryExpression),
     Literal(Literal),
-    Variable(Variable<'a>),
-    ProcCall(CallArgument<'a>),
+    ProcCall(CallArgument),
+    PunctuatedPath(PunctuatedPath),
 }
 
-pub struct IfElse<'a> {
-    pub condition: Box<Expression<'a>>,
-    pub body: Vec<Statement<'a>>,
+pub struct IfElse {
+    pub condition: Box<Expression>,
+    pub body: Vec<Statement>,
     pub else_if: Option<Box<Self>>,
 }
 
-pub struct AndExpression<'a> {
-    pub left: Box<Expression<'a>>,
-    pub right: Box<Expression<'a>>,
+pub struct AndExpression {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
 }
 
-pub struct OrExpression<'a> {
-    pub left: Box<Expression<'a>>,
-    pub right: Box<Expression<'a>>,
+pub struct OrExpression {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
 }
 
-pub struct NotExpression<'a> {
-    pub expr: Box<Expression<'a>>,
+pub struct NotExpression {
+    pub expr: Box<Expression>,
 }
 
-pub struct AddExpression<'a> {
-    pub left: Box<Expression<'a>>,
-    pub right: Box<Expression<'a>>,
+pub struct AddExpression {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
 }
 
-pub struct SubtractExpression<'a> {
-    pub left: Box<Expression<'a>>,
-    pub right: Box<Expression<'a>>,
+pub struct SubtractExpression {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
 }
 
-pub struct DivideExpression<'a> {
-    pub left: Box<Expression<'a>>,
-    pub right: Box<Expression<'a>>,
+pub struct DivideExpression {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
 }
 
-pub struct MultiplyExpression<'a> {
-    pub left: Box<Expression<'a>>,
-    pub right: Box<Expression<'a>>,
+pub struct MultiplyExpression {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
 }
 
-pub struct UnaryExpression<'a> {
-    pub expr: Box<Expression<'a>>,
+pub struct UnaryExpression {
+    pub expr: Box<Expression>,
 }
 
-pub struct Variable<'a> {
-    pub ident: &'a str,
+pub struct CallArgument {
+    pub expr: Box<Expression>,
 }
 
-pub struct CallArgument<'a> {
-    pub expr: Box<Expression<'a>>,
+pub struct PunctuatedPath {
+    pub path: Vec<Span>,
 }
