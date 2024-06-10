@@ -23,7 +23,7 @@ pub struct Proc {
     pub ident: Span,
     pub arguments: Vec<Argument>,
     pub returns: Vec<Argument>,
-    pub body: Vec<Statement>,
+    pub body: Block,
     pub span: Range<usize>,
 }
 
@@ -34,10 +34,22 @@ pub struct Argument {
 }
 
 pub enum DataType {
+    Builtin(BuiltinDataType),
+    Slice(Box<Self>),
+    Array {
+        size: Box<Expression>,
+        element_type: Box<Self>,
+    },
+    Other(PunctuatedPath),
+}
+
+pub enum BuiltinDataType {
+    UPtr,
     U8,
     U16,
     U32,
     U64,
+    IPtr,
     I8,
     I16,
     I32,
@@ -45,14 +57,6 @@ pub enum DataType {
     F32,
     F64,
     String,
-    Slice(Box<Self>),
-    Array { size: u64, element_type: Box<Self> },
-    Custom(CompoundDataType),
-}
-
-pub struct CompoundDataType {
-    pub ident: Span,
-    pub package: Option<Span>,
 }
 
 pub enum Statement {
@@ -85,6 +89,11 @@ pub enum Expression {
     Literal(Literal),
     ProcCall(CallArgument),
     PunctuatedPath(PunctuatedPath),
+    Block(Block),
+}
+
+pub struct Block {
+    pub statements: Vec<Statement>,
 }
 
 pub struct IfElse {
@@ -136,5 +145,5 @@ pub struct CallArgument {
 }
 
 pub struct PunctuatedPath {
-    pub path: Vec<Span>,
+    pub components: Vec<Span>,
 }
