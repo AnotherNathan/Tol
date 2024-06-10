@@ -57,6 +57,12 @@ pub struct CompoundDataType {
 
 pub enum Statement {
     Assignment(Assignment),
+    AddAssignment(Assignment),
+    SubtractAssignment(Assignment),
+    MultiplyAssignment(Assignment),
+    DivideAssignment(Assignment),
+    OrAssignment(Assignment),
+    AndAssignment(Assignment),
     Expression(Expression),
     Loop,
 }
