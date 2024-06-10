@@ -75,7 +75,7 @@ pub enum Expression<'a> {
     Divide(DivideExpression<'a>),
     Multiply(MultiplyExpression<'a>),
     Unary(UnaryExpression<'a>),
-    Literal(Literal<'a>),
+    Literal(Literal),
     Variable(Variable<'a>),
     ProcCall(CallArgument<'a>),
 }

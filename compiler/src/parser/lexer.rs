@@ -2,20 +2,26 @@ use std::{iter::FusedIterator, ops::Range};
 
 use itertools::Itertools;
 
+use super::span::Span;
+
 pub fn tokenize(source: &str) -> Lexer {
     Lexer {
         source,
         byte_pos: 0,
+        column: 0,
+        line: 0,
     }
 }
 
 pub struct Lexer<'a> {
     source: &'a str,
     byte_pos: usize,
+    line: usize,
+    column: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum Token<'a> {
+pub enum TokenKind {
     NewLine,
     Dot,
     Colon,
@@ -34,50 +40,50 @@ pub enum Token<'a> {
     Slash,
     Asterisk,
     Ampersand,
-    Identifier(&'a str),
-    Literal(Literal<'a>),
+    Identifier,
+    Literal(Literal),
     Unknown(char),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum Literal<'a> {
+pub enum Literal {
     Int(u128),
     Float(f64),
-    String(&'a str),
+    String,
     Rune(char),
 }
 
-pub struct TokenData<'a> {
-    pub token: Token<'a>,
-    pub span: Range<usize>,
+pub struct Token {
+    pub kind: TokenKind,
+    pub span: Span,
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = TokenData<'a>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_white_spaces();
 
         let first_char = self.peek_char()?;
         match first_char {
-            '\n' => return self.single_char_token(Token::NewLine, '\n'),
-            '.' => return self.single_char_token(Token::Dot, '.'),
-            ':' => return self.single_char_token(Token::Colon, ':'),
-            '(' => return self.single_char_token(Token::LParen, '('),
-            ')' => return self.single_char_token(Token::RParen, ')'),
-            '{' => return self.single_char_token(Token::LBrace, '{'),
-            '}' => return self.single_char_token(Token::RBrace, '}'),
-            '[' => return self.single_char_token(Token::LBracket, '['),
-            ']' => return self.single_char_token(Token::RBracket, ']'),
-            '<' => return self.single_char_token(Token::Less, '<'),
-            '>' => return self.single_char_token(Token::Greater, '>'),
-            '!' => return self.single_char_token(Token::Exclamation, '!'),
-            '=' => return self.single_char_token(Token::Equal, '='),
-            '+' => return self.single_char_token(Token::Plus, '+'),
-            '-' => return self.single_char_token(Token::Minus, '-'),
-            '/' => return self.single_char_token(Token::Slash, '/'),
-            '*' => return self.single_char_token(Token::Asterisk, '*'),
-            '&' => return self.single_char_token(Token::Ampersand, '&'),
+            '\n' => return self.build_token_and_advance(TokenKind::NewLine, "\n"),
+            '.' => return self.build_token_and_advance(TokenKind::Dot, "."),
+            ':' => return self.build_token_and_advance(TokenKind::Colon, ":"),
+            '(' => return self.build_token_and_advance(TokenKind::LParen, "("),
+            ')' => return self.build_token_and_advance(TokenKind::RParen, ")"),
+            '{' => return self.build_token_and_advance(TokenKind::LBrace, "{"),
+            '}' => return self.build_token_and_advance(TokenKind::RBrace, "}"),
+            '[' => return self.build_token_and_advance(TokenKind::LBracket, "["),
+            ']' => return self.build_token_and_advance(TokenKind::RBracket, "]"),
+            '<' => return self.build_token_and_advance(TokenKind::Less, "<"),
+            '>' => return self.build_token_and_advance(TokenKind::Greater, ">"),
+            '!' => return self.build_token_and_advance(TokenKind::Exclamation, "!"),
+            '=' => return self.build_token_and_advance(TokenKind::Equal, "="),
+            '+' => return self.build_token_and_advance(TokenKind::Plus, "+"),
+            '-' => return self.build_token_and_advance(TokenKind::Minus, "-"),
+            '/' => return self.build_token_and_advance(TokenKind::Slash, "/"),
+            '*' => return self.build_token_and_advance(TokenKind::Asterisk, "*"),
+            '&' => return self.build_token_and_advance(TokenKind::Ampersand, "&"),
             _ => (),
         }
 
@@ -109,7 +115,10 @@ impl<'a> Iterator for Lexer<'a> {
             }
         }
 
-        self.build_token_and_advance(Token::Unknown(first_char), first_char.len_utf8())
+        self.build_token_and_advance(
+            TokenKind::Unknown(first_char),
+            &self.source_at_current_pos()[0..first_char.len_utf8()],
+        )
     }
 }
 
@@ -126,10 +135,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn single_char_token(&mut self, token: Token<'a>, c: char) -> Option<TokenData<'a>> {
-        self.build_token_and_advance(token, c.len_utf8())
-    }
-
     fn peek_char(&self) -> Option<char> {
         self.source.get(self.byte_pos..)?.chars().nth(0)
     }
@@ -138,73 +143,80 @@ impl<'a> Lexer<'a> {
         self.source.get(self.byte_pos..).unwrap()
     }
 
-    fn parse_digit_literal(&mut self) -> Option<TokenData<'a>> {
+    fn parse_digit_literal(&mut self) -> Option<Token> {
         let source = self.source_at_current_pos();
         let length = source
-            .char_indices()
-            .take_while(|(_, c)| c.is_ascii_digit() || *c == '.')
-            .last()
-            .map(|(i, _)| i + 1)
-            .unwrap_or(0);
-        let source = &self.source[self.byte_pos..(self.byte_pos + length)];
-        if let Ok(val) = source.parse::<u128>() {
-            return self.build_token_and_advance(Token::Literal(Literal::Int(val)), source.len());
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .map(|c| c.len_utf8())
+            .sum();
+        let literal = &source[0..length];
+        if let Ok(val) = literal.parse::<u128>() {
+            return self.build_token_and_advance(TokenKind::Literal(Literal::Int(val)), literal);
         }
-        if let Ok(val) = source.parse::<f64>() {
-            return self.build_token_and_advance(Token::Literal(Literal::Float(val)), source.len());
+        if let Ok(val) = literal.parse::<f64>() {
+            return self.build_token_and_advance(TokenKind::Literal(Literal::Float(val)), literal);
         }
 
         None
     }
 
-    fn parse_rune_literal(&mut self) -> Option<TokenData<'a>> {
+    fn parse_rune_literal(&mut self) -> Option<Token> {
         let source = self.source_at_current_pos();
         let closing = source.chars().nth(2)?;
         if closing != '\'' {
             return None;
         }
         let c = source.chars().nth(1).unwrap();
-        return self.build_token_and_advance(
-            Token::Literal(Literal::Rune(c)),
-            c.len_utf8() + 2 * '\''.len_utf8(),
-        );
+        let length = 2 * '\''.len_utf8() + c.len_utf8();
+        let literal = &source[0..length];
+        return self.build_token_and_advance(TokenKind::Literal(Literal::Rune(c)), literal);
     }
 
-    fn parse_string_literal(&mut self) -> Option<TokenData<'a>> {
+    fn parse_string_literal(&mut self) -> Option<Token> {
         let source = self.source_at_current_pos();
         let length = source
-            .char_indices()
+            .chars()
             .skip(1)
-            .take_while_inclusive(|(_, c)| *c != '"')
-            .last()?
-            .0
-            + 1;
-        return self
-            .build_token_and_advance(Token::Literal(Literal::String(&source[0..length])), length);
+            .take_while(|c| *c != '"')
+            .map(|c| c.len_utf8())
+            .sum::<usize>()
+            + 2;
+        let literal = &source[0..length];
+        return self.build_token_and_advance(TokenKind::Literal(Literal::String), literal);
     }
 
-    fn parse_identifier(&mut self) -> Option<TokenData<'a>> {
+    fn parse_identifier(&mut self) -> Option<Token> {
         let source = self.source_at_current_pos();
-        let last_index = source
-            .char_indices()
-            .take_while(|(_, c)| c.is_alphabetic() || c.is_ascii_digit() || *c == '_')
-            .last()?
-            .0;
-        let identifier = &source[0..=last_index];
-        return self.build_token_and_advance(Token::Identifier(identifier), last_index + 1);
+        let length = source
+            .chars()
+            .take_while(|c| c.is_alphabetic() || c.is_ascii_digit() || *c == '_')
+            .map(|c| c.len_utf8())
+            .sum();
+        let identifier = &source[0..length];
+        return self.build_token_and_advance(TokenKind::Identifier, identifier);
     }
 
-    fn build_token_and_advance(
-        &mut self,
-        token: Token<'a>,
-        length: usize,
-    ) -> Option<TokenData<'a>> {
-        let data = TokenData {
-            token,
-            span: self.byte_pos..(self.byte_pos + length),
+    fn build_token_and_advance(&mut self, kind: TokenKind, token: &str) -> Option<Token> {
+        let length = token.len();
+        let line_count = token.lines().count();
+        let column_end = if line_count == 0 {
+            self.column + token.chars().count()
+        } else {
+            token.lines().last().map(|l| l.chars().count()).unwrap_or(0)
+        };
+        let token = Token {
+            kind,
+            span: Span {
+                file_pos: self.byte_pos..(self.byte_pos + length),
+                line: self.line..(self.line + line_count),
+                column: self.column..column_end,
+            },
         };
         self.byte_pos += length;
-        Some(data)
+        self.line += line_count;
+        self.column = column_end;
+        Some(token)
     }
 }
 
@@ -217,40 +229,57 @@ mod tests {
         let source = ":\n()[]{}<>!+-/=&* ident .123 12.4 _underscore_ident ";
         let mut lexer = tokenize(source);
 
-        assert_eq!(Some(Token::Colon), next_token(&mut lexer));
-        assert_eq!(Some(Token::NewLine), next_token(&mut lexer));
-        assert_eq!(Some(Token::LParen), next_token(&mut lexer));
-        assert_eq!(Some(Token::RParen), next_token(&mut lexer));
-        assert_eq!(Some(Token::LBracket), next_token(&mut lexer));
-        assert_eq!(Some(Token::RBracket), next_token(&mut lexer));
-        assert_eq!(Some(Token::LBrace), next_token(&mut lexer));
-        assert_eq!(Some(Token::RBrace), next_token(&mut lexer));
-        assert_eq!(Some(Token::Less), next_token(&mut lexer));
-        assert_eq!(Some(Token::Greater), next_token(&mut lexer));
-        assert_eq!(Some(Token::Exclamation), next_token(&mut lexer));
-        assert_eq!(Some(Token::Plus), next_token(&mut lexer));
-        assert_eq!(Some(Token::Minus), next_token(&mut lexer));
-        assert_eq!(Some(Token::Slash), next_token(&mut lexer));
-        assert_eq!(Some(Token::Equal), next_token(&mut lexer));
-        assert_eq!(Some(Token::Ampersand), next_token(&mut lexer));
-        assert_eq!(Some(Token::Asterisk), next_token(&mut lexer));
-        assert_eq!(Some(Token::Identifier("ident")), next_token(&mut lexer));
-        assert_eq!(Some(Token::Dot), next_token(&mut lexer));
-        assert_eq!(
-            Some(Token::Literal(Literal::Int(123))),
-            next_token(&mut lexer)
+        assert_next_token(&mut lexer, TokenKind::Colon, ":", source);
+        assert_next_token(&mut lexer, TokenKind::NewLine, "\n", source);
+        assert_next_token(&mut lexer, TokenKind::LParen, "(", source);
+        assert_next_token(&mut lexer, TokenKind::RParen, ")", source);
+        assert_next_token(&mut lexer, TokenKind::LBracket, "[", source);
+        assert_next_token(&mut lexer, TokenKind::RBracket, "]", source);
+        assert_next_token(&mut lexer, TokenKind::LBrace, "{", source);
+        assert_next_token(&mut lexer, TokenKind::RBrace, "}", source);
+        assert_next_token(&mut lexer, TokenKind::Less, "<", source);
+        assert_next_token(&mut lexer, TokenKind::Greater, ">", source);
+        assert_next_token(&mut lexer, TokenKind::Exclamation, "!", source);
+        assert_next_token(&mut lexer, TokenKind::Plus, "+", source);
+        assert_next_token(&mut lexer, TokenKind::Minus, "-", source);
+        assert_next_token(&mut lexer, TokenKind::Slash, "/", source);
+        assert_next_token(&mut lexer, TokenKind::Equal, "=", source);
+        assert_next_token(&mut lexer, TokenKind::Ampersand, "&", source);
+        assert_next_token(&mut lexer, TokenKind::Asterisk, "*", source);
+        assert_next_token(&mut lexer, TokenKind::Identifier, "ident", source);
+        assert_next_token(&mut lexer, TokenKind::Dot, ".", &source);
+        assert_next_token(
+            &mut lexer,
+            TokenKind::Literal(Literal::Int(123)),
+            "123",
+            &source,
         );
-        assert_eq!(
-            Some(Token::Literal(Literal::Float(12.4))),
-            next_token(&mut lexer)
+        assert_next_token(
+            &mut lexer,
+            TokenKind::Literal(Literal::Float(12.4)),
+            "12.4",
+            &source,
         );
-        assert_eq!(
-            Some(Token::Identifier("_underscore_ident")),
-            next_token(&mut lexer)
+        assert_next_token(
+            &mut lexer,
+            TokenKind::Identifier,
+            "_underscore_ident",
+            &source,
         );
     }
 
-    fn next_token<'a>(lexer: &mut Lexer<'a>) -> Option<Token<'a>> {
-        lexer.next().map(|t| t.token)
+    fn assert_next_token(
+        lexer: &mut Lexer,
+        expected_kind: TokenKind,
+        expected_token: &str,
+        source: &str,
+    ) {
+        let token = match lexer.next() {
+            Some(t) => t,
+            None => panic!("expected there to be a token"),
+        };
+
+        assert_eq!(token.kind, expected_kind);
+        assert_eq!(&source[token.span.file_pos], expected_token);
     }
 }
