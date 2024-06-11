@@ -1,6 +1,4 @@
-use std::{iter::FusedIterator, ops::Range};
-
-use itertools::Itertools;
+use std::iter::FusedIterator;
 
 use super::span::Span;
 
@@ -24,6 +22,7 @@ pub struct Lexer<'a> {
 pub enum TokenKind {
     NewLine,
     Dot,
+    Comma,
     Colon,
     LParen,
     RParen,
@@ -31,15 +30,16 @@ pub enum TokenKind {
     RBrace,
     LBracket,
     RBracket,
-    Less,
+    Smaller,
     Greater,
     Exclamation,
     Equal,
     Plus,
-    Minus,
+    Dash,
     Slash,
     Asterisk,
     Ampersand,
+    Bar,
     Identifier,
     Literal(Literal),
     Unknown(char),
@@ -69,6 +69,7 @@ impl<'a> Iterator for Lexer<'a> {
         match first_char {
             '\n' => return self.build_token_and_advance(TokenKind::NewLine, "\n"),
             '.' => return self.build_token_and_advance(TokenKind::Dot, "."),
+            ',' => return self.build_token_and_advance(TokenKind::Comma, ","),
             ':' => return self.build_token_and_advance(TokenKind::Colon, ":"),
             '(' => return self.build_token_and_advance(TokenKind::LParen, "("),
             ')' => return self.build_token_and_advance(TokenKind::RParen, ")"),
@@ -76,15 +77,16 @@ impl<'a> Iterator for Lexer<'a> {
             '}' => return self.build_token_and_advance(TokenKind::RBrace, "}"),
             '[' => return self.build_token_and_advance(TokenKind::LBracket, "["),
             ']' => return self.build_token_and_advance(TokenKind::RBracket, "]"),
-            '<' => return self.build_token_and_advance(TokenKind::Less, "<"),
+            '<' => return self.build_token_and_advance(TokenKind::Smaller, "<"),
             '>' => return self.build_token_and_advance(TokenKind::Greater, ">"),
             '!' => return self.build_token_and_advance(TokenKind::Exclamation, "!"),
             '=' => return self.build_token_and_advance(TokenKind::Equal, "="),
             '+' => return self.build_token_and_advance(TokenKind::Plus, "+"),
-            '-' => return self.build_token_and_advance(TokenKind::Minus, "-"),
+            '-' => return self.build_token_and_advance(TokenKind::Dash, "-"),
             '/' => return self.build_token_and_advance(TokenKind::Slash, "/"),
             '*' => return self.build_token_and_advance(TokenKind::Asterisk, "*"),
             '&' => return self.build_token_and_advance(TokenKind::Ampersand, "&"),
+            '|' => return self.build_token_and_advance(TokenKind::Bar, "|"),
             _ => (),
         }
 
@@ -227,7 +229,7 @@ mod tests {
 
     #[test]
     fn get_tokens() {
-        let source = ":\n()[]{}<>!+-/=&* ident .123 12.4 _underscore_ident ";
+        let source = ":\n()[]{}<>!+-/=&|* ident ,.123 12.4 _underscore_ident ";
         let mut lexer = tokenize(source);
 
         assert_next_token(&mut lexer, TokenKind::Colon, ":", source);
@@ -238,16 +240,18 @@ mod tests {
         assert_next_token(&mut lexer, TokenKind::RBracket, "]", source);
         assert_next_token(&mut lexer, TokenKind::LBrace, "{", source);
         assert_next_token(&mut lexer, TokenKind::RBrace, "}", source);
-        assert_next_token(&mut lexer, TokenKind::Less, "<", source);
+        assert_next_token(&mut lexer, TokenKind::Smaller, "<", source);
         assert_next_token(&mut lexer, TokenKind::Greater, ">", source);
         assert_next_token(&mut lexer, TokenKind::Exclamation, "!", source);
         assert_next_token(&mut lexer, TokenKind::Plus, "+", source);
-        assert_next_token(&mut lexer, TokenKind::Minus, "-", source);
+        assert_next_token(&mut lexer, TokenKind::Dash, "-", source);
         assert_next_token(&mut lexer, TokenKind::Slash, "/", source);
         assert_next_token(&mut lexer, TokenKind::Equal, "=", source);
         assert_next_token(&mut lexer, TokenKind::Ampersand, "&", source);
+        assert_next_token(&mut lexer, TokenKind::Bar, "|", source);
         assert_next_token(&mut lexer, TokenKind::Asterisk, "*", source);
         assert_next_token(&mut lexer, TokenKind::Identifier, "ident", source);
+        assert_next_token(&mut lexer, TokenKind::Comma, ",", &source);
         assert_next_token(&mut lexer, TokenKind::Dot, ".", &source);
         assert_next_token(
             &mut lexer,
